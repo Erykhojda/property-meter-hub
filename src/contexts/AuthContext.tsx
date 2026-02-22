@@ -21,12 +21,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchRole = async (userId: string) => {
-    const { data } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', userId)
-      .single();
-    setRole(data?.role as AppRole | null);
+    try {
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
+        .single();
+      if (error) {
+        console.error('Failed to fetch role:', error.message);
+        setRole(null);
+      } else {
+        setRole(data?.role as AppRole | null);
+      }
+    } catch (e) {
+      console.error('Unexpected error fetching role:', e);
+      setRole(null);
+    }
   };
 
   useEffect(() => {
