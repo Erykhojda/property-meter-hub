@@ -42,19 +42,12 @@ export default function Dashboard() {
 
   useEffect(() => {
     const fetchBudynki = async () => {
-      try {
-        const { data, error } = await supabase.from('budynki').select('id, nazwa, adres').order('nazwa');
-        if (error) {
-          console.error('Failed to fetch budynki:', error.message);
-        } else if (data && data.length > 0) {
-          setBudynki(data);
-          setSelectedBudynek(data[0].id);
-        }
-      } catch (e) {
-        console.error('Unexpected error fetching budynki:', e);
-      } finally {
-        setLoading(false);
+      const { data } = await supabase.from('budynki').select('id, nazwa, adres').order('nazwa');
+      if (data) {
+        setBudynki(data);
+        if (data.length > 0) setSelectedBudynek(data[0].id);
       }
+      setLoading(false);
     };
     fetchBudynki();
   }, []);
