@@ -2,11 +2,13 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DataQualityBadge } from "@/components/DataQualityBadge";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart, Bar } from "recharts";
-import { Droplets, Flame, Zap, TrendingUp } from "lucide-react";
-import { budynki, buildingConsumption, apartmentConsumption, generateReadings, type DataQuality } from "@/data/mock-data";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid } from "recharts";
+import { Droplets, Flame, Zap, TrendingUp, Eye } from "lucide-react";
+import { budynki, lokale, buildingConsumption, apartmentConsumption, generateReadings, generateUnitReadings, mierniki, type DataQuality } from "@/data/mock-data";
 
 const chartConfig = {
   woda: { label: "Woda (m³)", color: "hsl(200, 80%, 50%)" },
@@ -15,18 +17,41 @@ const chartConfig = {
 };
 
 const mediaCards = [
-  { key: "woda" as const, label: "Woda", unit: "m³", icon: Droplets, color: "text-blue-500" },
-  { key: "cieplo" as const, label: "Ciepło", unit: "kWh", icon: Flame, color: "text-orange-500" },
-  { key: "energia" as const, label: "Energia", unit: "kWh", icon: Zap, color: "text-yellow-500" },
+  { key: "woda" as const, label: "Woda", unit: "m³", icon: Droplets, color: "text-primary" },
+  { key: "cieplo" as const, label: "Ciepło", unit: "kWh", icon: Flame, color: "text-destructive" },
+  { key: "energia" as const, label: "Energia", unit: "kWh", icon: Zap, color: "text-warning" },
 ];
+
+const qualityColors: Record<DataQuality, string> = {
+  validated: "hsl(142, 76%, 36%)",
+  estimated: "hsl(38, 92%, 50%)",
+  missing: "hsl(0, 84%, 60%)",
+};
 
 export default function DashboardPage() {
   const [selectedBuilding, setSelectedBuilding] = useState(budynki[0].id);
   const [dateRange, setDateRange] = useState("30");
+  const [detailLokal, setDetailLokal] = useState<string | null>(null);
 
   const building = buildingConsumption.find((b) => b.budynek_id === selectedBuilding)!;
   const apartments = apartmentConsumption.filter((a) => a.budynek_id === selectedBuilding);
   const readings = generateReadings(Number(dateRange));
+
+  // Unit detail data
+  const detailLok = detailLokal ? lokale.find((l) => l.id === detailLokal) : null;
+  const unitReadings = detailLokal ? generateUnitReadings(detailLokal, Number(dateRange)) : [];
+  const unitMierniki = detailLokal ? mierniki.filter((m) => m.lokal_id === detailLokal) : [];
+
+  // Aggregate unit readings for chart
+  const unitChartData = detailLokal ? (() => {
+    const byDate: Record<string, { date: string; woda: number; cieplo: number; energia: number; qualities: DataQuality[] }> = {};
+    unitReadings.forEach((r) => {
+      if (!byDate[r.date]) byDate[r.date] = { date: r.date, woda: 0, cieplo: 0, energia: 0, qualities: [] };
+      byDate[r.date][r.typ] += r.wartosc;
+      byDate[r.date].qualities.push(r.jakosc);
+    });
+    return Object.values(byDate);
+  })() : [];
 
   return (
     <div className="space-y-6">
@@ -37,9 +62,7 @@ export default function DashboardPage() {
         </div>
         <div className="flex gap-3">
           <Select value={selectedBuilding} onValueChange={setSelectedBuilding}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue />
-            </SelectTrigger>
+            <SelectTrigger className="w-[200px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               {budynki.map((b) => (
                 <SelectItem key={b.id} value={b.id}>{b.nazwa}</SelectItem>
@@ -47,9 +70,7 @@ export default function DashboardPage() {
             </SelectContent>
           </Select>
           <Select value={dateRange} onValueChange={setDateRange}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue />
-            </SelectTrigger>
+            <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="7">7 dni</SelectItem>
               <SelectItem value="30">30 dni</SelectItem>
@@ -70,8 +91,7 @@ export default function DashboardPage() {
             <CardContent>
               <div className="text-2xl font-bold">{building[m.key]} {m.unit}</div>
               <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                <TrendingUp className="h-3 w-3" />
-                Bieżący okres
+                <TrendingUp className="h-3 w-3" />Bieżący okres
               </div>
             </CardContent>
           </Card>
@@ -135,6 +155,7 @@ export default function DashboardPage() {
                 <TableHead className="text-right">Woda (m³)</TableHead>
                 <TableHead className="text-right">Ciepło (kWh)</TableHead>
                 <TableHead className="text-right">Energia (kWh)</TableHead>
+                <TableHead></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -154,17 +175,86 @@ export default function DashboardPage() {
                     <span className="mr-2">{a.energia}</span>
                     <DataQualityBadge quality={a.energia_quality} />
                   </TableCell>
+                  <TableCell>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDetailLokal(a.lokal_id)}>
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
               {apartments.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">Brak lokali w tym budynku</TableCell>
+                  <TableCell colSpan={6} className="text-center text-muted-foreground">Brak lokali w tym budynku</TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+
+      {/* Unit detail dialog */}
+      <Dialog open={!!detailLokal} onOpenChange={(v) => !v && setDetailLokal(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Szczegóły zużycia — Lokal {detailLok?.numer}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Mierniki w lokalu */}
+            <div>
+              <p className="text-sm font-medium mb-2">Mierniki ({unitMierniki.length}):</p>
+              <div className="flex flex-wrap gap-2">
+                {unitMierniki.map((m) => (
+                  <div key={m.id} className="rounded-md border px-3 py-1.5 text-xs">
+                    <span className="font-mono">{m.device_id}</span> — {m.nazwa}
+                  </div>
+                ))}
+                {unitMierniki.length === 0 && <span className="text-xs text-muted-foreground">Brak mierników</span>}
+              </div>
+            </div>
+
+            {/* Chart */}
+            {unitChartData.length > 0 && (
+              <ChartContainer config={chartConfig} className="h-[250px] w-full">
+                <LineChart data={unitChartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
+                  <YAxis tick={{ fontSize: 10 }} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Line type="monotone" dataKey="woda" stroke="var(--color-woda)" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="cieplo" stroke="var(--color-cieplo)" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="energia" stroke="var(--color-energia)" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ChartContainer>
+            )}
+
+            {/* Per-reading table with quality */}
+            <div className="max-h-[200px] overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Typ</TableHead>
+                    <TableHead className="text-right">Wartość</TableHead>
+                    <TableHead>Jednostka</TableHead>
+                    <TableHead>Jakość</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {unitReadings.slice(-20).reverse().map((r, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="text-sm">{r.date}</TableCell>
+                      <TableCell className="text-sm capitalize">{r.typ}</TableCell>
+                      <TableCell className="text-right font-mono text-sm">{r.wartosc}</TableCell>
+                      <TableCell className="text-sm">{r.jednostka}</TableCell>
+                      <TableCell><DataQualityBadge quality={r.jakosc} /></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
