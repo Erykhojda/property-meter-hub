@@ -44,6 +44,15 @@ export const mierniki = [
   { id: "m-8", lokal_id: "lok-9", device_id: "BM-E-009", typ: "energia" as MediaType, nazwa: "Licznik energii", data_instalacji: "2024-04-15", status: "active", last_sync_at: "2025-02-20T11:00:00" },
 ];
 
+// Punkty pomiarowe — automatycznie tworzone na bazie mierników
+export const punktyPomiarowe = mierniki.map((m) => ({
+  id: `pp-${m.id}`,
+  miernik_id: m.id,
+  nazwa: `${m.nazwa} — PP`,
+  typ: m.typ,
+  jednostka: m.typ === "woda" ? "m³" : "kWh",
+}));
+
 // Generate time-series readings for charts
 export function generateReadings(days: number = 30) {
   const readings: { date: string; woda: number; cieplo: number; energia: number; quality: DataQuality }[] = [];
@@ -59,6 +68,34 @@ export function generateReadings(days: number = 30) {
       energia: +(8 + Math.random() * 6).toFixed(2),
       quality: qualities[Math.floor(Math.random() * 10) < 7 ? 0 : Math.floor(Math.random() * 10) < 9 ? 1 : 2],
     });
+  }
+  return readings;
+}
+
+// Generate unit-level detail readings (per punkt pomiarowy)
+export function generateUnitReadings(lokalId: string, days: number = 30) {
+  const lokalMierniki = mierniki.filter((m) => m.lokal_id === lokalId);
+  const readings: { date: string; punkt_id: string; typ: MediaType; wartosc: number; jednostka: string; jakosc: DataQuality }[] = [];
+  const now = new Date();
+  const qualities: DataQuality[] = ["validated", "estimated", "missing"];
+  for (let i = days; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split("T")[0];
+    for (const m of lokalMierniki) {
+      const pp = punktyPomiarowe.find((p) => p.miernik_id === m.id);
+      if (!pp) continue;
+      const base = m.typ === "woda" ? 3 : m.typ === "cieplo" ? 15 : 8;
+      const range = m.typ === "woda" ? 4 : m.typ === "cieplo" ? 10 : 6;
+      readings.push({
+        date: dateStr,
+        punkt_id: pp.id,
+        typ: m.typ,
+        wartosc: +(base + Math.random() * range).toFixed(2),
+        jednostka: pp.jednostka,
+        jakosc: qualities[Math.floor(Math.random() * 10) < 7 ? 0 : Math.floor(Math.random() * 10) < 9 ? 1 : 2],
+      });
+    }
   }
   return readings;
 }
@@ -88,18 +125,56 @@ export const apartmentConsumption = lokale.map((l) => ({
 }));
 
 export const zarzadcy = [
-  { id: "z-1", full_name: "Jan Kowalski", email: "jan.kowalski@example.com", budynki: ["bud-1", "bud-2"], data_od: "2024-01-01", data_do: null },
-  { id: "z-2", full_name: "Anna Nowak", email: "anna.nowak@example.com", budynki: ["bud-3"], data_od: "2024-03-15", data_do: null },
-  { id: "z-3", full_name: "Piotr Wiśniewski", email: "piotr.w@example.com", budynki: ["bud-4"], data_od: "2024-06-01", data_do: null },
+  { id: "z-1", full_name: "Jan Kowalski", email: "jan.kowalski@example.com", telefon: "+48 600 100 200", firma: "Kowalski Zarządzanie Sp. z o.o.", nip_firmy: "6781234567", status: "active" as const },
+  { id: "z-2", full_name: "Anna Nowak", email: "anna.nowak@example.com", telefon: "+48 601 200 300", firma: "NovaDom Zarządzanie", nip_firmy: "9452345678", status: "active" as const },
+  { id: "z-3", full_name: "Piotr Wiśniewski", email: "piotr.w@example.com", telefon: "+48 602 300 400", firma: "ProBuild Management", nip_firmy: "1133456789", status: "active" as const },
+];
+
+// Historia przypisań zarządców do budynków (data_od/data_do)
+export const zarzadcaPrzypisania = [
+  { id: "zp-1", zarzadca_id: "z-1", budynek_id: "bud-1", data_od: "2024-01-01", data_do: null },
+  { id: "zp-2", zarzadca_id: "z-1", budynek_id: "bud-2", data_od: "2024-01-01", data_do: null },
+  { id: "zp-3", zarzadca_id: "z-2", budynek_id: "bud-3", data_od: "2024-03-15", data_do: null },
+  { id: "zp-4", zarzadca_id: "z-3", budynek_id: "bud-4", data_od: "2024-06-01", data_do: null },
+  { id: "zp-5", zarzadca_id: "z-1", budynek_id: "bud-3", data_od: "2023-06-01", data_do: "2024-03-14" },
 ];
 
 export const syncLogi = [
-  { id: "s-1", created_at: "2025-02-20T10:30:00", status: "success" as const, budynki_count: 4, rekordy_count: 256, bledy_count: 0 },
-  { id: "s-2", created_at: "2025-02-19T10:30:00", status: "partial" as const, budynki_count: 4, rekordy_count: 198, bledy_count: 12 },
-  { id: "s-3", created_at: "2025-02-18T10:30:00", status: "success" as const, budynki_count: 4, rekordy_count: 261, bledy_count: 0 },
-  { id: "s-4", created_at: "2025-02-17T10:30:00", status: "failed" as const, budynki_count: 0, rekordy_count: 0, bledy_count: 4 },
-  { id: "s-5", created_at: "2025-02-16T10:30:00", status: "success" as const, budynki_count: 4, rekordy_count: 244, bledy_count: 0 },
+  { id: "s-1", created_at: "2025-02-20T10:30:00", status: "success" as const, budynki_count: 4, rekordy_count: 256, bledy_count: 0, czas_ms: 1230, szczegoly: "Import zakończony pomyślnie" },
+  { id: "s-2", created_at: "2025-02-19T10:30:00", status: "partial" as const, budynki_count: 4, rekordy_count: 198, bledy_count: 12, czas_ms: 2450, szczegoly: "12 odczytów odrzuconych — brak punktu pomiarowego" },
+  { id: "s-3", created_at: "2025-02-18T10:30:00", status: "success" as const, budynki_count: 4, rekordy_count: 261, bledy_count: 0, czas_ms: 1180, szczegoly: "Import zakończony pomyślnie" },
+  { id: "s-4", created_at: "2025-02-17T10:30:00", status: "failed" as const, budynki_count: 0, rekordy_count: 0, bledy_count: 4, czas_ms: 340, szczegoly: "Błąd połączenia z API Bmeters (timeout)" },
+  { id: "s-5", created_at: "2025-02-16T10:30:00", status: "success" as const, budynki_count: 4, rekordy_count: 244, bledy_count: 0, czas_ms: 1310, szczegoly: "Import zakończony pomyślnie" },
 ];
+
+// Status przekazania struktury do Bmeters
+export type TransferStatus = "pending" | "sent" | "accepted" | "rejected";
+export const strukturaTransfery = [
+  { id: "st-1", budynek_id: "bud-1", status: "accepted" as TransferStatus, data: "2025-02-15T09:00:00", szczegoly: "Struktura zaakceptowana przez Bmeters" },
+  { id: "st-2", budynek_id: "bud-2", status: "accepted" as TransferStatus, data: "2025-02-15T09:01:00", szczegoly: "Struktura zaakceptowana przez Bmeters" },
+  { id: "st-3", budynek_id: "bud-3", status: "sent" as TransferStatus, data: "2025-02-18T14:00:00", szczegoly: "Oczekiwanie na potwierdzenie Bmeters" },
+  { id: "st-4", budynek_id: "bud-4", status: "rejected" as TransferStatus, data: "2025-02-19T11:30:00", szczegoly: "Nieprawidłowy format adresu — wymaga korekty" },
+];
+
+// Walidacja struktury — wynik sprawdzenia budynku
+export type ValidationResult = { budynek_id: string; budynek_nazwa: string; adres_ok: boolean; lokale_ok: boolean; mierniki_ok: boolean; bledy: string[] };
+export const walidacjaWyniki: ValidationResult[] = [
+  { budynek_id: "bud-1", budynek_nazwa: "Budynek A", adres_ok: true, lokale_ok: true, mierniki_ok: true, bledy: [] },
+  { budynek_id: "bud-2", budynek_nazwa: "Budynek B", adres_ok: true, lokale_ok: true, mierniki_ok: true, bledy: [] },
+  { budynek_id: "bud-3", budynek_nazwa: "Budynek C", adres_ok: true, lokale_ok: true, mierniki_ok: false, bledy: ["Lokal 1A — brak miernika ciepła"] },
+  { budynek_id: "bud-4", budynek_nazwa: "Wieża Centralna", adres_ok: false, lokale_ok: true, mierniki_ok: false, bledy: ["Adres niezgodny z formatem Bmeters", "Lokal 1A — brak miernika wody i ciepła"] },
+];
+
+// Harmonogram importu
+export const harmonogramImportu = {
+  aktywny: true,
+  czestotliwosc: "codziennie" as "codziennie" | "co_godzine" | "co_6h" | "co_tydzien",
+  godzina: "03:00",
+  ostatni_import: "2025-02-20T03:00:00",
+  nastepny_import: "2025-02-21T03:00:00",
+  retry_count: 3,
+  retry_delay_min: 15,
+};
 
 export const auditLogi = [
   { id: "a-1", created_at: "2025-02-20T14:22:00", user: "Jan Kowalski", akcja: "Dodanie", encja: "Lokal", szczegoly: "Dodano lokal 3A w Budynek A" },
@@ -109,4 +184,7 @@ export const auditLogi = [
   { id: "a-5", created_at: "2025-02-18T13:45:00", user: "System", akcja: "Import danych", encja: "Odczyty", szczegoly: "Zaimportowano 198 odczytów z Bmeters (12 błędów)" },
   { id: "a-6", created_at: "2025-02-17T10:00:00", user: "Jan Kowalski", akcja: "Dodanie", encja: "Miernik", szczegoly: "Dodano miernik BM-W-003 do lokalu 2A" },
   { id: "a-7", created_at: "2025-02-16T08:30:00", user: "Admin", akcja: "Usunięcie", encja: "Lokal", szczegoly: "Usunięto lokal testowy w Budynku B" },
+  { id: "a-8", created_at: "2025-02-15T09:00:00", user: "System", akcja: "Transfer struktury", encja: "Budynek", szczegoly: "Przekazano strukturę Budynku A i B do Bmeters" },
+  { id: "a-9", created_at: "2025-02-14T15:20:00", user: "Admin", akcja: "Konfiguracja", encja: "Integracja", szczegoly: "Zaktualizowano klucz API Bmeters" },
+  { id: "a-10", created_at: "2025-02-13T11:00:00", user: "System", akcja: "Walidacja", encja: "Budynek", szczegoly: "Walidacja struktury Wieży Centralnej — 2 błędy" },
 ];
