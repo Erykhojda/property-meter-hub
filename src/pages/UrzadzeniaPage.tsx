@@ -5,25 +5,76 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Gauge, Crosshair, Trash2 } from "lucide-react";
-import { mierniki, lokale, budynki, punktyPomiarowe } from "@/data/mock-data";
+import { useAppStore, newId, Miernik } from "@/data/store";
+import { MediaType } from "@/data/mock-data";
+import { toast } from "sonner";
 
-const mediaLabels = { woda: "Woda", cieplo: "Ciepło", energia: "Energia" };
+const mediaLabels: Record<MediaType, string> = { woda: "Woda", cieplo: "Ciepło", energia: "Energia" };
 const statusBadge = (s: string) =>
   s === "active"
     ? <Badge className="bg-success/10 text-success border-success/20" variant="outline">Aktywny</Badge>
     : <Badge variant="outline" className="text-muted-foreground">Nieaktywny</Badge>;
 
+const EMPTY_FORM = { device_id: "", nazwa: "", lokal_id: "", typ: "" as MediaType | "", data_instalacji: new Date().toISOString().split("T")[0] };
+
 export default function UrzadzeniaPage() {
-  const [selectedBuilding, setSelectedBuilding] = useState(budynki[0].id);
+  const { state, dispatch } = useAppStore();
+  const { mierniki, lokale, budynki } = state;
+
+  // Derive punkty pomiarowe from current mierniki
+  const punktyPomiarowe = mierniki.map((m) => ({
+    id: `pp-${m.id}`,
+    miernik_id: m.id,
+    nazwa: `${m.nazwa} — PP`,
+    typ: m.typ,
+    jednostka: m.typ === "woda" ? "m³" : "kWh",
+  }));
+
+  const [selectedBuilding, setSelectedBuilding] = useState(budynki[0]?.id ?? "");
   const [showAddMeter, setShowAddMeter] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Miernik | null>(null);
+  const [form, setForm] = useState(EMPTY_FORM);
 
   const buildingLokale = lokale.filter((l) => l.budynek_id === selectedBuilding);
   const buildingMierniki = mierniki.filter((m) => buildingLokale.some((l) => l.id === m.lokal_id));
   const buildingPP = punktyPomiarowe.filter((pp) => buildingMierniki.some((m) => m.id === pp.miernik_id));
+
+  const setF = (k: keyof typeof form, v: string) => setForm((p) => ({ ...p, [k]: v }));
+
+  const handleAdd = () => {
+    if (!form.device_id.trim()) { toast.error("Podaj ID urządzenia"); return; }
+    if (!form.lokal_id) { toast.error("Wybierz lokal"); return; }
+    if (!form.typ) { toast.error("Wybierz typ medium"); return; }
+    const now = new Date().toISOString();
+    dispatch({
+      type: "ADD_MIERNIK",
+      payload: {
+        id: newId("m"),
+        lokal_id: form.lokal_id,
+        device_id: form.device_id,
+        typ: form.typ as MediaType,
+        nazwa: form.nazwa || form.device_id,
+        data_instalacji: form.data_instalacji,
+        status: "active",
+        last_sync_at: now,
+      },
+    });
+    toast.success("Miernik zarejestrowany");
+    setShowAddMeter(false);
+    setForm(EMPTY_FORM);
+  };
+
+  const handleDelete = () => {
+    if (!deleteTarget) return;
+    dispatch({ type: "DELETE_MIERNIK", id: deleteTarget.id });
+    toast.success("Miernik usunięty");
+    setDeleteTarget(null);
+  };
 
   return (
     <div className="space-y-6">
@@ -43,7 +94,9 @@ export default function UrzadzeniaPage() {
               ))}
             </SelectContent>
           </Select>
-          <Button onClick={() => setShowAddMeter(true)}><Plus className="mr-2 h-4 w-4" />Dodaj miernik</Button>
+          <Button onClick={() => { setForm(EMPTY_FORM); setShowAddMeter(true); }}>
+            <Plus className="mr-2 h-4 w-4" />Dodaj miernik
+          </Button>
         </div>
       </div>
 
@@ -79,10 +132,17 @@ export default function UrzadzeniaPage() {
                         <TableCell>{lokal?.numer}</TableCell>
                         <TableCell><Badge variant="secondary">{mediaLabels[m.typ]}</Badge></TableCell>
                         <TableCell>{m.data_instalacji}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{new Date(m.last_sync_at!).toLocaleString("pl-PL")}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {m.last_sync_at ? new Date(m.last_sync_at).toLocaleString("pl-PL") : "—"}
+                        </TableCell>
                         <TableCell>{statusBadge(m.status!)}</TableCell>
                         <TableCell>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive"
+                            onClick={() => setDeleteTarget(m)}
+                          >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </TableCell>
@@ -153,22 +213,20 @@ export default function UrzadzeniaPage() {
       {/* Dialog: Dodaj miernik */}
       <Dialog open={showAddMeter} onOpenChange={setShowAddMeter}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Rejestracja miernika</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Rejestracja miernika</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>ID urządzenia Bmeters</Label>
-              <Input placeholder="BM-X-000" />
+              <Label>ID urządzenia Bmeters *</Label>
+              <Input placeholder="BM-X-000" value={form.device_id} onChange={(e) => setF("device_id", e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>Nazwa</Label>
-              <Input placeholder="Wodomierz zimna" />
+              <Input placeholder="Wodomierz zimna" value={form.nazwa} onChange={(e) => setF("nazwa", e.target.value)} />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Lokal</Label>
-                <Select>
+                <Label>Lokal *</Label>
+                <Select value={form.lokal_id} onValueChange={(v) => setF("lokal_id", v)}>
                   <SelectTrigger><SelectValue placeholder="Wybierz lokal" /></SelectTrigger>
                   <SelectContent>
                     {buildingLokale.map((l) => (
@@ -178,8 +236,8 @@ export default function UrzadzeniaPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Typ</Label>
-                <Select>
+                <Label>Typ *</Label>
+                <Select value={form.typ} onValueChange={(v) => setF("typ", v)}>
                   <SelectTrigger><SelectValue placeholder="Typ medium" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="woda">Woda</SelectItem>
@@ -191,7 +249,7 @@ export default function UrzadzeniaPage() {
             </div>
             <div className="space-y-2">
               <Label>Data instalacji</Label>
-              <Input type="date" />
+              <Input type="date" value={form.data_instalacji} onChange={(e) => setF("data_instalacji", e.target.value)} />
             </div>
             <p className="text-xs text-muted-foreground">
               Punkt pomiarowy zostanie automatycznie utworzony po rejestracji miernika.
@@ -199,10 +257,26 @@ export default function UrzadzeniaPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddMeter(false)}>Anuluj</Button>
-            <Button onClick={() => setShowAddMeter(false)}>Zarejestruj</Button>
+            <Button onClick={handleAdd}>Zarejestruj</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Alert: Usuń miernik */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Usuń miernik</AlertDialogTitle>
+            <AlertDialogDescription>
+              Czy na pewno chcesz usunąć miernik „{deleteTarget?.device_id} — {deleteTarget?.nazwa}"? Tej operacji nie można cofnąć.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Anuluj</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Usuń</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
