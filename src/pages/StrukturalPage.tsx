@@ -10,9 +10,10 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ChevronRight, Building2, Home, Landmark, MapPin, Plus, Edit, Trash2 } from "lucide-react";
+import { ChevronRight, Building2, Home, Landmark, MapPin, Plus, Edit, Trash2, Download, SendToBack } from "lucide-react";
 import { useAppStore, newId, Inwestor, Inwestycja, Budynek, Lokal, useManagerScope } from "@/data/store";
 import { toast } from "sonner";
+import { buildBmetersPayload, downloadJson } from "@/lib/exportUtils";
 
 type Level = "inwestorzy" | "inwestycje" | "budynki" | "lokale";
 
@@ -129,6 +130,74 @@ export default function StrukturalPage() {
     setShowDelete(false);
   };
 
+  // ── EPC-02: Bmeters JSON sync export ────────────────────────────────────────
+  const handleSyncExport = (e: React.MouseEvent, bud: Budynek) => {
+    e.stopPropagation();
+    const payload = buildBmetersPayload(
+      bud,
+      lokale,
+      state.mierniki
+    );
+    const filename = `bmeters_${bud.nazwa.toLowerCase().replace(/\s+/g, "-")}.json`;
+    downloadJson(payload, filename);
+    toast.success(`Przekazano strukturę „${bud.nazwa}” do Bmeters`);
+  };
+
+  // ── Export ───────────────────────────────────────────────────────────────────
+  const handleExport = () => {
+    let rows: string[][] = [];
+    let filename = "export.csv";
+
+    switch (current.level) {
+      case "inwestorzy":
+        rows = [
+          ["ID", "Nazwa", "NIP", "Adres", "Kontakt"],
+          ...inwestorzy.map((x) => [x.id, x.nazwa, x.nip, x.adres, x.kontakt]),
+        ];
+        filename = "inwestorzy.csv";
+        break;
+      case "inwestycje": {
+        const items = inwestycje.filter((i) => i.inwestor_id === current.id);
+        rows = [
+          ["ID", "Nazwa", "Opis", "Inwestor ID"],
+          ...items.map((x) => [x.id, x.nazwa, x.opis, x.inwestor_id]),
+        ];
+        filename = "inwestycje.csv";
+        break;
+      }
+      case "budynki": {
+        const items = budynki.filter((b) => b.inwestycja_id === current.id && myBudynkiIds.has(b.id));
+        rows = [
+          ["ID", "Nazwa", "Adres", "Miasto", "Kod pocztowy", "Liczba lokali"],
+          ...items.map((x) => [x.id, x.nazwa, x.adres, x.miasto, x.kod_pocztowy, String(x.liczba_lokali)]),
+        ];
+        filename = "budynki.csv";
+        break;
+      }
+      case "lokale": {
+        const items = lokale.filter((l) => l.budynek_id === current.id);
+        rows = [
+          ["ID", "Numer", "Piętro", "Powierzchnia (m²)", "Typ"],
+          ...items.map((x) => [x.id, x.numer, String(x.pietro), String(x.powierzchnia), x.typ]),
+        ];
+        filename = "lokale.csv";
+        break;
+      }
+    }
+
+    const csvContent = rows
+      .map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Wyeksportowano plik ${filename}`);
+  };
+
   // ── Actions row ───────────────────────────────────────────────────────────────
   const renderActions = (item: any) => (
     <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
@@ -202,6 +271,16 @@ export default function StrukturalPage() {
               </div>
               <div className="flex items-center gap-2">
                 <Badge variant="secondary">{bud.liczba_lokali} lokali</Badge>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs gap-1 border-emerald-500/40 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400"
+                  onClick={(e) => handleSyncExport(e, bud)}
+                  title="Gotowy do synchronizacji — pobierz JSON dla Bmeters"
+                >
+                  <SendToBack className="h-3 w-3" />
+                  Sync Bmeters
+                </Button>
                 {renderActions(bud)}
                 <ChevronRight className="h-4 w-4 text-muted-foreground" />
               </div>
@@ -297,10 +376,16 @@ export default function StrukturalPage() {
           <h1 className="text-2xl font-bold">Struktura</h1>
           <p className="text-muted-foreground">Hierarchia inwestycji i nieruchomości</p>
         </div>
-        <Button onClick={openAdd}>
-          <Plus className="mr-2 h-4 w-4" />
-          Dodaj {levelLabels[current.level]}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleExport}>
+            <Download className="mr-2 h-4 w-4" />
+            Eksportuj CSV
+          </Button>
+          <Button onClick={openAdd}>
+            <Plus className="mr-2 h-4 w-4" />
+            Dodaj {levelLabels[current.level]}
+          </Button>
+        </div>
       </div>
 
       {/* Breadcrumbs */}

@@ -4,7 +4,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { DataQualityBadge } from "@/components/DataQualityBadge";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
 import {
@@ -14,7 +16,7 @@ import {
 import {
   Droplets, Flame, Zap, TrendingUp, TrendingDown, Eye,
   Building2, AlertTriangle, Battery, Cpu, Cable,
-  ArrowUpDown, ChevronUp, ChevronDown,
+  ArrowUpDown, ChevronUp, ChevronDown, FileDown,
 } from "lucide-react";
 import {
   buildingConsumption, apartmentConsumption,
@@ -23,6 +25,7 @@ import {
 } from "@/data/mock-data";
 import { useManagerScope } from "@/data/store";
 import { cn } from "@/lib/utils";
+import { buildConsumptionCsvRows, downloadCsv } from "@/lib/exportUtils";
 
 // ── Chart config ────────────────────────────────────────────────────────────
 
@@ -151,6 +154,11 @@ export default function DashboardPage() {
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [page, setPage] = useState(0);
   const [showAlarmOnly, setShowAlarmOnly] = useState(false);
+  const [showCsvDialog, setShowCsvDialog] = useState(false);
+  const today = new Date().toISOString().split("T")[0];
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const [csvDateFrom, setCsvDateFrom] = useState(thirtyDaysAgo);
+  const [csvDateTo, setCsvDateTo] = useState(today);
 
   const activeBuildingId = selectedBuilding || myBudynki[0]?.id || "";
   const building = buildingConsumption.find((b) => b.budynek_id === activeBuildingId);
@@ -214,6 +222,25 @@ export default function DashboardPage() {
       .reduce((acc, m) => acc + getMiernikAlarmCount(m), 0);
   }, [apartments]);
 
+  // EPC-05: CSV export handler
+  const handleCsvExport = () => {
+    if (!csvDateFrom || !csvDateTo || csvDateFrom > csvDateTo) {
+      return;
+    }
+    const aptRows = apartments.map((a) => ({ lokal_id: a.lokal_id, numer: a.numer }));
+    const rows = buildConsumptionCsvRows(
+      aptRows,
+      mierniki,
+      generateUnitReadings,
+      csvDateFrom,
+      csvDateTo
+    );
+    const buildingName = myBudynki.find((b) => b.id === activeBuildingId)?.nazwa ?? "budynek";
+    const safeName = buildingName.toLowerCase().replace(/\s+/g, "-");
+    downloadCsv(rows, `zuzucie_${safeName}_${csvDateFrom}_${csvDateTo}.csv`);
+    setShowCsvDialog(false);
+  };
+
   if (myBudynki.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-32 text-center">
@@ -252,6 +279,10 @@ export default function DashboardPage() {
               ))}
             </SelectContent>
           </Select>
+          <Button variant="outline" onClick={() => setShowCsvDialog(true)}>
+            <FileDown className="mr-2 h-4 w-4" />
+            Eksportuj CSV
+          </Button>
         </div>
       </div>
 
@@ -591,6 +622,57 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── EPC-05: CSV Export Dialog ── */}
+      <Dialog open={showCsvDialog} onOpenChange={setShowCsvDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileDown className="h-5 w-5 text-primary" />
+              Eksportuj dane do CSV
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Pobierz odczyty zużycia mediów dla wszystkich lokali w budynku
+            <span className="font-medium text-foreground"> {myBudynki.find((b) => b.id === activeBuildingId)?.nazwa}</span>.
+          </p>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="csv-date-from">Data od</Label>
+              <Input
+                id="csv-date-from"
+                type="date"
+                value={csvDateFrom}
+                onChange={(e) => setCsvDateFrom(e.target.value)}
+                max={csvDateTo}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="csv-date-to">Data do</Label>
+              <Input
+                id="csv-date-to"
+                type="date"
+                value={csvDateTo}
+                onChange={(e) => setCsvDateTo(e.target.value)}
+                min={csvDateFrom}
+              />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Kolumny: Nr lokalu, Nr seryjny miernika, Poprzedni odczyt, Aktualny odczyt, Zużycie łącznie, Status jakości.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCsvDialog(false)}>Anuluj</Button>
+            <Button
+              onClick={handleCsvExport}
+              disabled={!csvDateFrom || !csvDateTo || csvDateFrom > csvDateTo}
+            >
+              <FileDown className="mr-2 h-4 w-4" />
+              Pobierz CSV
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
