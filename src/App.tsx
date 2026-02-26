@@ -8,7 +8,7 @@ import { AppProvider, useAppStore, AuthUser } from "@/data/store";
 import LoginPage from "@/pages/LoginPage";
 import DashboardPage from "@/pages/DashboardPage";
 import StrukturalPage from "@/pages/StrukturalPage";
-import ZarzadcyPage from "@/pages/ZarzadcyPage";
+import MojProfilPage from "@/pages/MojProfilPage";
 import UrzadzeniaPage from "@/pages/UrzadzeniaPage";
 import IntegracjaPage from "@/pages/IntegracjaPage";
 import AudytPage from "@/pages/AudytPage";
@@ -33,7 +33,7 @@ function AuthGate() {
         <Route element={<AppLayout />}>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/struktura" element={<StrukturalPage />} />
-          <Route path="/zarzadcy" element={<ZarzadcyPage />} />
+          <Route path="/profil" element={<MojProfilPage />} />
           <Route path="/urzadzenia" element={<UrzadzeniaPage />} />
           <Route path="/integracja" element={<IntegracjaPage />} />
           <Route path="/audyt" element={<AudytPage />} />

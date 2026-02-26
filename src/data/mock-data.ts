@@ -1,4 +1,4 @@
-// Mock data for SCORE (Appartme) frontend
+// Mock data for SCORE (Appartme) frontend — extended with Bmeters alarm fields
 
 export const inwestorzy = [
   { id: "inv-1", nazwa: "Grupa Deweloperska ABC", nip: "1234567890", adres: "ul. Warszawska 10, Kraków", kontakt: "biuro@abc-dev.pl" },
@@ -34,14 +34,38 @@ export type MediaType = "woda" | "cieplo" | "energia";
 export type DataQuality = "validated" | "estimated" | "missing";
 
 export const mierniki = [
-  { id: "m-1", lokal_id: "lok-1", device_id: "BM-W-001", typ: "woda" as MediaType, nazwa: "Wodomierz zimna", data_instalacji: "2024-01-15", status: "active", last_sync_at: "2025-02-20T10:30:00" },
-  { id: "m-2", lokal_id: "lok-1", device_id: "BM-C-001", typ: "cieplo" as MediaType, nazwa: "Ciepłomierz", data_instalacji: "2024-01-15", status: "active", last_sync_at: "2025-02-20T10:30:00" },
-  { id: "m-3", lokal_id: "lok-1", device_id: "BM-E-001", typ: "energia" as MediaType, nazwa: "Licznik energii", data_instalacji: "2024-01-15", status: "active", last_sync_at: "2025-02-20T10:30:00" },
-  { id: "m-4", lokal_id: "lok-2", device_id: "BM-W-002", typ: "woda" as MediaType, nazwa: "Wodomierz zimna", data_instalacji: "2024-02-01", status: "active", last_sync_at: "2025-02-19T08:15:00" },
-  { id: "m-5", lokal_id: "lok-2", device_id: "BM-C-002", typ: "cieplo" as MediaType, nazwa: "Ciepłomierz", data_instalacji: "2024-02-01", status: "active", last_sync_at: "2025-02-19T08:15:00" },
-  { id: "m-6", lokal_id: "lok-3", device_id: "BM-W-003", typ: "woda" as MediaType, nazwa: "Wodomierz zimna", data_instalacji: "2024-03-10", status: "inactive", last_sync_at: "2025-01-05T12:00:00" },
-  { id: "m-7", lokal_id: "lok-6", device_id: "BM-W-006", typ: "woda" as MediaType, nazwa: "Wodomierz zimna", data_instalacji: "2024-06-01", status: "active", last_sync_at: "2025-02-20T09:00:00" },
-  { id: "m-8", lokal_id: "lok-9", device_id: "BM-E-009", typ: "energia" as MediaType, nazwa: "Licznik energii", data_instalacji: "2024-04-15", status: "active", last_sync_at: "2025-02-20T11:00:00" },
+  {
+    id: "m-1", lokal_id: "lok-1", device_id: "BM-W-001", typ: "woda" as MediaType, nazwa: "Wodomierz zimna", data_instalacji: "2024-01-15", status: "active", last_sync_at: "2025-02-20T10:30:00",
+    alarmDevice: false, alarmBattery: false, alarmDamagedCable: false, alarmOverflow: false, alarmReverseInstallation: false
+  },
+  {
+    id: "m-2", lokal_id: "lok-1", device_id: "BM-C-001", typ: "cieplo" as MediaType, nazwa: "Ciepłomierz", data_instalacji: "2024-01-15", status: "active", last_sync_at: "2025-02-20T10:30:00",
+    alarmDevice: false, alarmBattery: true, alarmDamagedCable: false, alarmOverflow: false, alarmReverseInstallation: false
+  },
+  {
+    id: "m-3", lokal_id: "lok-1", device_id: "BM-E-001", typ: "energia" as MediaType, nazwa: "Licznik energii", data_instalacji: "2024-01-15", status: "active", last_sync_at: "2025-02-20T10:30:00",
+    alarmDevice: false, alarmBattery: false, alarmDamagedCable: false, alarmOverflow: false, alarmReverseInstallation: false
+  },
+  {
+    id: "m-4", lokal_id: "lok-2", device_id: "BM-W-002", typ: "woda" as MediaType, nazwa: "Wodomierz zimna", data_instalacji: "2024-02-01", status: "active", last_sync_at: "2025-02-19T08:15:00",
+    alarmDevice: false, alarmBattery: false, alarmDamagedCable: false, alarmOverflow: false, alarmReverseInstallation: false
+  },
+  {
+    id: "m-5", lokal_id: "lok-2", device_id: "BM-C-002", typ: "cieplo" as MediaType, nazwa: "Ciepłomierz", data_instalacji: "2024-02-01", status: "active", last_sync_at: "2025-02-19T08:15:00",
+    alarmDevice: true, alarmBattery: false, alarmDamagedCable: true, alarmOverflow: false, alarmReverseInstallation: false
+  },
+  {
+    id: "m-6", lokal_id: "lok-3", device_id: "BM-W-003", typ: "woda" as MediaType, nazwa: "Wodomierz zimna", data_instalacji: "2024-03-10", status: "inactive", last_sync_at: "2025-01-05T12:00:00",
+    alarmDevice: false, alarmBattery: true, alarmDamagedCable: false, alarmOverflow: false, alarmReverseInstallation: false
+  },
+  {
+    id: "m-7", lokal_id: "lok-6", device_id: "BM-W-006", typ: "woda" as MediaType, nazwa: "Wodomierz zimna", data_instalacji: "2024-06-01", status: "active", last_sync_at: "2025-02-20T09:00:00",
+    alarmDevice: false, alarmBattery: false, alarmDamagedCable: false, alarmOverflow: false, alarmReverseInstallation: false
+  },
+  {
+    id: "m-8", lokal_id: "lok-9", device_id: "BM-E-009", typ: "energia" as MediaType, nazwa: "Licznik energii", data_instalacji: "2024-04-15", status: "active", last_sync_at: "2025-02-20T11:00:00",
+    alarmDevice: false, alarmBattery: false, alarmDamagedCable: false, alarmOverflow: false, alarmReverseInstallation: false
+  },
 ];
 
 // Punkty pomiarowe — automatycznie tworzone na bazie mierników
@@ -52,6 +76,7 @@ export const punktyPomiarowe = mierniki.map((m) => ({
   typ: m.typ,
   jednostka: m.typ === "woda" ? "m³" : "kWh",
 }));
+
 
 // Generate time-series readings for charts
 export function generateReadings(days: number = 30) {
@@ -101,14 +126,37 @@ export function generateUnitReadings(lokalId: string, days: number = 30) {
 }
 
 // Building-level aggregated consumption
-export const buildingConsumption = budynki.map((b) => ({
+export const buildingConsumption = budynki.map((b, i) => ({
   budynek_id: b.id,
   nazwa: b.nazwa,
-  woda: +(80 + Math.random() * 120).toFixed(1),
-  cieplo: +(400 + Math.random() * 300).toFixed(1),
-  energia: +(200 + Math.random() * 200).toFixed(1),
+  woda: +(80 + i * 23 + 47).toFixed(1),
+  cieplo: +(400 + i * 87 + 53).toFixed(1),
+  energia: +(200 + i * 61 + 29).toFixed(1),
+  vs_prev: {
+    woda: +(-8 + Math.random() * 20 - 2).toFixed(1),
+    cieplo: +(-5 + Math.random() * 15 - 3).toFixed(1),
+    energia: +(-10 + Math.random() * 18 - 1).toFixed(1),
+  },
   quality_ratio: { validated: 72, estimated: 20, missing: 8 },
 }));
+
+// 12-month history for area chart
+export function generateMonthlyReadings() {
+  const result: { month: string; woda: number; cieplo: number; energia: number }[] = [];
+  const now = new Date();
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const label = d.toLocaleString("pl-PL", { month: "short", year: "2-digit" });
+    result.push({
+      month: label,
+      woda: +(60 + Math.random() * 80 + (i < 4 ? 20 : 0)).toFixed(1),
+      cieplo: +(200 + Math.random() * 300 + (i > 5 ? 80 : 0)).toFixed(1),
+      energia: +(150 + Math.random() * 150).toFixed(1),
+    });
+  }
+  return result;
+}
+
 
 // Apartment consumption for drill-down
 export const apartmentConsumption = lokale.map((l) => ({

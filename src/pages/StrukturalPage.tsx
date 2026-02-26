@@ -11,7 +11,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ChevronRight, Building2, Home, Landmark, MapPin, Plus, Edit, Trash2 } from "lucide-react";
-import { useAppStore, newId, Inwestor, Inwestycja, Budynek, Lokal } from "@/data/store";
+import { useAppStore, newId, Inwestor, Inwestycja, Budynek, Lokal, useManagerScope } from "@/data/store";
 import { toast } from "sonner";
 
 type Level = "inwestorzy" | "inwestycje" | "budynki" | "lokale";
@@ -26,6 +26,7 @@ const levelLabels: Record<Level, string> = {
 export default function StrukturalPage() {
   const { state, dispatch } = useAppStore();
   const { inwestorzy, inwestycje, budynki, lokale } = state;
+  const { myBudynkiIds } = useManagerScope();
 
   const [path, setPath] = useState<{ level: Level; id?: string; label?: string }[]>([
     { level: "inwestorzy", label: "Inwestorzy" },
@@ -187,7 +188,7 @@ export default function StrukturalPage() {
         ));
 
       case "budynki":
-        const filtBud = budynki.filter((b) => b.inwestycja_id === current.id);
+        const filtBud = budynki.filter((b) => b.inwestycja_id === current.id && myBudynkiIds.has(b.id));
         if (filtBud.length === 0) return <EmptyState icon={<Building2 />} text={'Brak budynk\u00f3w. Kliknij „Dodaj budynek“.'} />;
         return filtBud.map((bud) => (
           <Card key={bud.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("lokale", bud.id, bud.nazwa)}>
@@ -334,7 +335,7 @@ export default function StrukturalPage() {
       {/* Dialog: Edytuj */}
       <Dialog open={showEdit} onOpenChange={setShowEdit}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Edytuj {editItem?.nazwa ?? `Lokal ${editItem?.numer}` ?? ""}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Edytuj {editItem?.nazwa ?? `Lokal ${editItem?.numer}`}</DialogTitle></DialogHeader>
           {renderAddForm()}
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEdit(false)}>Anuluj</Button>

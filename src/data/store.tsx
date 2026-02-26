@@ -7,7 +7,6 @@ import {
     mierniki as initMierniki,
     zarzadcy as initZarzadcy,
     zarzadcaPrzypisania as initPrzypisania,
-    MediaType,
 } from "./mock-data";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -19,7 +18,9 @@ export type Lokal = typeof initLokale[number];
 export type Miernik = typeof initMierniki[number];
 export type Zarzadca = typeof initZarzadcy[number];
 export type ZarzadcaPrzypisanie = typeof initPrzypisania[number];
-export type AuthUser = { name: string; email: string };
+
+/** Logged-in user — always associated with a concrete zarządca record */
+export type AuthUser = { name: string; email: string; zarzadca_id: string };
 
 interface AppState {
     user: AuthUser | null;
@@ -61,59 +62,33 @@ type Action =
 
 function reducer(state: AppState, action: Action): AppState {
     switch (action.type) {
-        // Auth
         case "LOGIN": return { ...state, user: action.payload };
         case "LOGOUT": return { ...state, user: null };
 
-        // Inwestorzy
-        case "ADD_INWESTOR":
-            return { ...state, inwestorzy: [...state.inwestorzy, action.payload] };
-        case "UPDATE_INWESTOR":
-            return { ...state, inwestorzy: state.inwestorzy.map((x) => x.id === action.payload.id ? action.payload : x) };
-        case "DELETE_INWESTOR":
-            return { ...state, inwestorzy: state.inwestorzy.filter((x) => x.id !== action.id) };
+        case "ADD_INWESTOR": return { ...state, inwestorzy: [...state.inwestorzy, action.payload] };
+        case "UPDATE_INWESTOR": return { ...state, inwestorzy: state.inwestorzy.map((x) => x.id === action.payload.id ? action.payload : x) };
+        case "DELETE_INWESTOR": return { ...state, inwestorzy: state.inwestorzy.filter((x) => x.id !== action.id) };
 
-        // Inwestycje
-        case "ADD_INWESTYCJA":
-            return { ...state, inwestycje: [...state.inwestycje, action.payload] };
-        case "UPDATE_INWESTYCJA":
-            return { ...state, inwestycje: state.inwestycje.map((x) => x.id === action.payload.id ? action.payload : x) };
-        case "DELETE_INWESTYCJA":
-            return { ...state, inwestycje: state.inwestycje.filter((x) => x.id !== action.id) };
+        case "ADD_INWESTYCJA": return { ...state, inwestycje: [...state.inwestycje, action.payload] };
+        case "UPDATE_INWESTYCJA": return { ...state, inwestycje: state.inwestycje.map((x) => x.id === action.payload.id ? action.payload : x) };
+        case "DELETE_INWESTYCJA": return { ...state, inwestycje: state.inwestycje.filter((x) => x.id !== action.id) };
 
-        // Budynki
-        case "ADD_BUDYNEK":
-            return { ...state, budynki: [...state.budynki, action.payload] };
-        case "UPDATE_BUDYNEK":
-            return { ...state, budynki: state.budynki.map((x) => x.id === action.payload.id ? action.payload : x) };
-        case "DELETE_BUDYNEK":
-            return { ...state, budynki: state.budynki.filter((x) => x.id !== action.id) };
+        case "ADD_BUDYNEK": return { ...state, budynki: [...state.budynki, action.payload] };
+        case "UPDATE_BUDYNEK": return { ...state, budynki: state.budynki.map((x) => x.id === action.payload.id ? action.payload : x) };
+        case "DELETE_BUDYNEK": return { ...state, budynki: state.budynki.filter((x) => x.id !== action.id) };
 
-        // Lokale
-        case "ADD_LOKAL":
-            return { ...state, lokale: [...state.lokale, action.payload] };
-        case "UPDATE_LOKAL":
-            return { ...state, lokale: state.lokale.map((x) => x.id === action.payload.id ? action.payload : x) };
-        case "DELETE_LOKAL":
-            return { ...state, lokale: state.lokale.filter((x) => x.id !== action.id) };
+        case "ADD_LOKAL": return { ...state, lokale: [...state.lokale, action.payload] };
+        case "UPDATE_LOKAL": return { ...state, lokale: state.lokale.map((x) => x.id === action.payload.id ? action.payload : x) };
+        case "DELETE_LOKAL": return { ...state, lokale: state.lokale.filter((x) => x.id !== action.id) };
 
-        // Mierniki
-        case "ADD_MIERNIK":
-            return { ...state, mierniki: [...state.mierniki, action.payload] };
-        case "DELETE_MIERNIK":
-            return { ...state, mierniki: state.mierniki.filter((x) => x.id !== action.id) };
+        case "ADD_MIERNIK": return { ...state, mierniki: [...state.mierniki, action.payload] };
+        case "DELETE_MIERNIK": return { ...state, mierniki: state.mierniki.filter((x) => x.id !== action.id) };
 
-        // Zarządcy
-        case "ADD_ZARZADCA":
-            return { ...state, zarzadcy: [...state.zarzadcy, action.payload] };
-        case "UPDATE_ZARZADCA":
-            return { ...state, zarzadcy: state.zarzadcy.map((x) => x.id === action.payload.id ? action.payload : x) };
-        case "DELETE_ZARZADCA":
-            return { ...state, zarzadcy: state.zarzadcy.filter((x) => x.id !== action.id) };
+        case "ADD_ZARZADCA": return { ...state, zarzadcy: [...state.zarzadcy, action.payload] };
+        case "UPDATE_ZARZADCA": return { ...state, zarzadcy: state.zarzadcy.map((x) => x.id === action.payload.id ? action.payload : x) };
+        case "DELETE_ZARZADCA": return { ...state, zarzadcy: state.zarzadcy.filter((x) => x.id !== action.id) };
 
-        // Przypisania
-        case "ADD_PRZYPISANIE":
-            return { ...state, zarzadcaPrzypisania: [...state.zarzadcaPrzypisania, action.payload] };
+        case "ADD_PRZYPISANIE": return { ...state, zarzadcaPrzypisania: [...state.zarzadcaPrzypisania, action.payload] };
         case "REMOVE_PRZYPISANIE":
             return {
                 ...state,
@@ -122,8 +97,7 @@ function reducer(state: AppState, action: Action): AppState {
                 ),
             };
 
-        default:
-            return state;
+        default: return state;
     }
 }
 
@@ -154,6 +128,28 @@ export function useAppStore() {
     const ctx = useContext(AppContext);
     if (!ctx) throw new Error("useAppStore must be used within AppProvider");
     return ctx;
+}
+
+/**
+ * Returns data scoped to the currently logged-in manager:
+ * - myBudynkiIds: IDs of buildings with active assignment to this manager
+ * - myBudynki, myLokale, myMierniki: filtered collections
+ */
+export function useManagerScope() {
+    const { state } = useAppStore();
+    const { user, zarzadcaPrzypisania, budynki, lokale, mierniki } = state;
+
+    const myBudynkiIds = new Set(
+        zarzadcaPrzypisania
+            .filter((p) => p.zarzadca_id === user?.zarzadca_id && !p.data_do)
+            .map((p) => p.budynek_id)
+    );
+
+    const myBudynki = budynki.filter((b) => myBudynkiIds.has(b.id));
+    const myLokale = lokale.filter((l) => myBudynkiIds.has(l.budynek_id));
+    const myMierniki = mierniki.filter((m) => myLokale.some((l) => l.id === m.lokal_id));
+
+    return { myBudynkiIds, myBudynki, myLokale, myMierniki };
 }
 
 // ─── ID Generator ─────────────────────────────────────────────────────────────

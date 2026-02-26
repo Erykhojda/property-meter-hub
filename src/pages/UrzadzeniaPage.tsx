@@ -9,8 +9,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Gauge, Crosshair, Trash2 } from "lucide-react";
-import { useAppStore, newId, Miernik } from "@/data/store";
+import { Plus, Gauge, Crosshair, Trash2, AlertTriangle } from "lucide-react";
+import { useAppStore, newId, Miernik, useManagerScope } from "@/data/store";
 import { MediaType } from "@/data/mock-data";
 import { toast } from "sonner";
 
@@ -24,7 +24,8 @@ const EMPTY_FORM = { device_id: "", nazwa: "", lokal_id: "", typ: "" as MediaTyp
 
 export default function UrzadzeniaPage() {
   const { state, dispatch } = useAppStore();
-  const { mierniki, lokale, budynki } = state;
+  const { mierniki } = state;
+  const { myBudynki, myLokale } = useManagerScope();
 
   // Derive punkty pomiarowe from current mierniki
   const punktyPomiarowe = mierniki.map((m) => ({
@@ -35,12 +36,13 @@ export default function UrzadzeniaPage() {
     jednostka: m.typ === "woda" ? "m³" : "kWh",
   }));
 
-  const [selectedBuilding, setSelectedBuilding] = useState(budynki[0]?.id ?? "");
+  const [selectedBuilding, setSelectedBuilding] = useState(myBudynki[0]?.id ?? "");
   const [showAddMeter, setShowAddMeter] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Miernik | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
 
-  const buildingLokale = lokale.filter((l) => l.budynek_id === selectedBuilding);
+  const activeBuildingId = selectedBuilding || myBudynki[0]?.id || "";
+  const buildingLokale = myLokale.filter((l) => l.budynek_id === activeBuildingId);
   const buildingMierniki = mierniki.filter((m) => buildingLokale.some((l) => l.id === m.lokal_id));
   const buildingPP = punktyPomiarowe.filter((pp) => buildingMierniki.some((m) => m.id === pp.miernik_id));
 
@@ -62,6 +64,11 @@ export default function UrzadzeniaPage() {
         data_instalacji: form.data_instalacji,
         status: "active",
         last_sync_at: now,
+        alarmDevice: false,
+        alarmBattery: false,
+        alarmDamagedCable: false,
+        alarmOverflow: false,
+        alarmReverseInstallation: false,
       },
     });
     toast.success("Miernik zarejestrowany");
@@ -89,7 +96,7 @@ export default function UrzadzeniaPage() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {budynki.map((b) => (
+              {myBudynki.map((b) => (
                 <SelectItem key={b.id} value={b.id}>{b.nazwa}</SelectItem>
               ))}
             </SelectContent>
@@ -119,12 +126,13 @@ export default function UrzadzeniaPage() {
                     <TableHead>Data instalacji</TableHead>
                     <TableHead>Ostatnia sync.</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead></TableHead>
+                    <TableHead>Alarmy</TableHead>
+                    <TableHead />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {buildingMierniki.map((m) => {
-                    const lokal = lokale.find((l) => l.id === m.lokal_id);
+                    const lokal = myLokale.find((l) => l.id === m.lokal_id);
                     return (
                       <TableRow key={m.id}>
                         <TableCell className="font-mono text-sm">{m.device_id}</TableCell>
@@ -136,6 +144,16 @@ export default function UrzadzeniaPage() {
                           {m.last_sync_at ? new Date(m.last_sync_at).toLocaleString("pl-PL") : "—"}
                         </TableCell>
                         <TableCell>{statusBadge(m.status!)}</TableCell>
+                        <TableCell>
+                          {(() => {
+                            const cnt = [m.alarmDevice, m.alarmBattery, m.alarmDamagedCable, m.alarmOverflow, m.alarmReverseInstallation].filter(Boolean).length;
+                            return cnt > 0 ? (
+                              <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 gap-1 text-xs">
+                                <AlertTriangle className="h-3 w-3" />{cnt}
+                              </Badge>
+                            ) : <span className="text-xs text-muted-foreground/40">—</span>;
+                          })()}
+                        </TableCell>
                         <TableCell>
                           <Button
                             variant="ghost"
@@ -183,7 +201,7 @@ export default function UrzadzeniaPage() {
                 <TableBody>
                   {buildingPP.map((pp) => {
                     const m = mierniki.find((x) => x.id === pp.miernik_id);
-                    const lok = lokale.find((l) => l.id === m?.lokal_id);
+                    const lok = myLokale.find((l) => l.id === m?.lokal_id);
                     return (
                       <TableRow key={pp.id}>
                         <TableCell className="font-mono text-sm">{pp.id}</TableCell>
