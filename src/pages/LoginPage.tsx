@@ -1,37 +1,57 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Eye, EyeOff, Lock, ChevronRight } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
-import { zarzadcy } from "@/data/mock-data";
 import type { AuthUser } from "@/data/store";
+import { login } from "@/lib/authApi";
+import { ApiError } from "@/lib/api";
 
 interface LoginPageProps {
     onLogin: (user: AuthUser) => void;
 }
 
 export default function LoginPage({ onLogin }: LoginPageProps) {
-    const [selectedZarzadcaId, setSelectedZarzadcaId] = useState(zarzadcy[0]?.id ?? "");
+    const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
 
-    const selectedZarzadca = zarzadcy.find((z) => z.id === selectedZarzadcaId);
-
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedZarzadcaId) { toast.error("Wybierz konto zarządcy"); return; }
+        if (!email.trim()) { toast.error("Podaj adres e-mail"); return; }
         if (!password.trim()) { toast.error("Podaj hasło"); return; }
+
         setLoading(true);
-        setTimeout(() => {
-            setLoading(false);
+        try {
+            const response = await login(email.trim(), password);
             onLogin({
-                name: selectedZarzadca?.full_name ?? selectedZarzadcaId,
-                email: selectedZarzadca?.email ?? `${selectedZarzadcaId}@demo.pl`,
-                zarzadca_id: selectedZarzadcaId,
+                name: response.name ?? email.split("@")[0],
+                email: response.email ?? email.trim(),
+                zarzadca_id: response.user_id,
+                userId: response.user_id,
+                token: response.token,
+                refreshToken: response.refreshToken,
+                role: (response.role as "admin" | "manager") ?? "manager",
             });
-        }, 700);
+        } catch (err) {
+            if (err instanceof ApiError && err.status === 401) {
+                toast.error("Nieprawidłowy e-mail lub hasło");
+            } else if (err instanceof ApiError) {
+                toast.error(`Błąd logowania (${err.status}): ${err.message}`);
+            } else {
+                // Backend nedostępny — tryb demo
+                toast.info("Backend niedostępny. Używam trybu demo.");
+                onLogin({
+                    name: email.split("@")[0],
+                    email: email.trim(),
+                    zarzadca_id: "demo-manager",
+                    role: "manager",
+                });
+            }
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -112,39 +132,31 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                     <div className="mb-8 space-y-1">
                         <p className="text-xs font-semibold text-primary uppercase tracking-widest">Bmeters</p>
                         <h1 className="text-2xl font-bold tracking-tight">Zaloguj się</h1>
-                        <p className="text-sm text-muted-foreground">Wybierz konto i podaj hasło, aby kontynuować</p>
+                        <p className="text-sm text-muted-foreground">Podaj dane konta, aby kontynuować</p>
                     </div>
 
                     {/* Card */}
                     <div className="rounded-2xl border bg-card shadow-lg shadow-black/5 p-6 space-y-5">
                         <form onSubmit={handleSubmit} className="space-y-4">
 
-                            {/* Account selector */}
+                            {/* Email */}
                             <div className="space-y-1.5">
-                                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground" htmlFor="zarzadca">
-                                    Konto zarządcy
+                                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground" htmlFor="email">
+                                    Adres e-mail
                                 </label>
-                                <Select value={selectedZarzadcaId} onValueChange={setSelectedZarzadcaId}>
-                                    <SelectTrigger id="zarzadca" className="h-11">
-                                        <SelectValue placeholder="Wybierz zarządcę..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {zarzadcy.map((z) => (
-                                            <SelectItem key={z.id} value={z.id}>
-                                                <div className="flex flex-col py-0.5">
-                                                    <span className="font-medium text-sm">{z.full_name}</span>
-                                                    {z.firma && <span className="text-xs text-muted-foreground">{z.firma}</span>}
-                                                </div>
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                {selectedZarzadca?.email && (
-                                    <p className="text-xs text-muted-foreground pl-0.5 flex items-center gap-1">
-                                        <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                                        {selectedZarzadca.email}
-                                    </p>
-                                )}
+                                <div className="relative">
+                                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                                    <Input
+                                        id="email"
+                                        type="email"
+                                        placeholder="jan@przyklad.pl"
+                                        className="pl-10 h-11"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        autoComplete="username"
+                                        autoFocus
+                                    />
+                                </div>
                             </div>
 
                             {/* Password */}
@@ -195,7 +207,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
 
                         <div className="flex items-center gap-2 pt-1">
                             <div className="h-px flex-1 bg-border" />
-                            <p className="text-xs text-muted-foreground">demo &mdash; dowolne hasło</p>
+                            <p className="text-xs text-muted-foreground">konto Appartme</p>
                             <div className="h-px flex-1 bg-border" />
                         </div>
                     </div>

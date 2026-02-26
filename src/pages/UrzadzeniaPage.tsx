@@ -11,16 +11,15 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Gauge, Crosshair, Trash2, AlertTriangle } from "lucide-react";
 import { useAppStore, newId, Miernik, useManagerScope } from "@/data/store";
-import { MediaType } from "@/data/mock-data";
 import { toast } from "sonner";
 
-const mediaLabels: Record<MediaType, string> = { woda: "Woda", cieplo: "Ciepło", energia: "Energia" };
+const mediaLabels: Record<Miernik["typ"], string> = { woda: "Woda", cieplo: "Ciepło", energia: "Energia" };
 const statusBadge = (s: string) =>
   s === "active"
     ? <Badge className="bg-success/10 text-success border-success/20" variant="outline">Aktywny</Badge>
     : <Badge variant="outline" className="text-muted-foreground">Nieaktywny</Badge>;
 
-const EMPTY_FORM = { device_id: "", nazwa: "", lokal_id: "", typ: "" as MediaType | "", data_instalacji: new Date().toISOString().split("T")[0] };
+const EMPTY_FORM = { device_id: "", nazwa: "", lokal_id: "", typ: "" as Miernik["typ"] | "", data_instalacji: new Date().toISOString().split("T")[0] };
 
 export default function UrzadzeniaPage() {
   const { state, dispatch } = useAppStore();
@@ -59,7 +58,7 @@ export default function UrzadzeniaPage() {
         id: newId("m"),
         lokal_id: form.lokal_id,
         device_id: form.device_id,
-        typ: form.typ as MediaType,
+        typ: form.typ as Miernik["typ"],
         nazwa: form.nazwa || form.device_id,
         data_instalacji: form.data_instalacji,
         status: "active",

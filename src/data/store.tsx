@@ -1,26 +1,47 @@
 import React, { createContext, useContext, useReducer } from "react";
-import {
-    inwestorzy as initInwestorzy,
-    inwestycje as initInwestycje,
-    budynki as initBudynki,
-    lokale as initLokale,
-    mierniki as initMierniki,
-    zarzadcy as initZarzadcy,
-    zarzadcaPrzypisania as initPrzypisania,
-} from "./mock-data";
+// No mock-data imports
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type Inwestor = typeof initInwestorzy[number];
-export type Inwestycja = typeof initInwestycje[number];
-export type Budynek = typeof initBudynki[number];
-export type Lokal = typeof initLokale[number];
-export type Miernik = typeof initMierniki[number];
-export type Zarzadca = typeof initZarzadcy[number];
-export type ZarzadcaPrzypisanie = typeof initPrzypisania[number];
+export interface Inwestor { id: string; nazwa: string; nip: string; adres: string; kontakt: string; }
+export interface Inwestycja { id: string; inwestor_id: string; nazwa: string; opis: string; }
+export interface Budynek { id: string; inwestycja_id: string; nazwa: string; adres: string; miasto: string; kod_pocztowy: string; liczba_lokali: number; }
+export interface Lokal { id: string; budynek_id: string; numer: string; pietro: number; powierzchnia: number; typ: string; }
+export interface Miernik {
+    id: string;
+    lokal_id: string;
+    device_id: string;
+    typ: "woda" | "cieplo" | "energia";
+    nazwa: string;
+    data_instalacji: string;
+    status: string;
+    last_sync_at: string;
+    alarmDevice: boolean;
+    alarmBattery: boolean;
+    alarmDamagedCable: boolean;
+    alarmOverflow: boolean;
+    alarmReverseInstallation: boolean;
+}
+export interface Zarzadca { id: string; full_name: string; email: string; telefon: string; firma: string; nip_firmy: string; status: "active" | "inactive"; }
+export interface ZarzadcaPrzypisanie { id: string; zarzadca_id: string; budynek_id: string; data_od: string; data_do: string | null; }
 
-/** Logged-in user — always associated with a concrete zarządca record */
-export type AuthUser = { name: string; email: string; zarzadca_id: string };
+export type UserRole = "admin" | "manager";
+
+/** Logged-in user — supports both real JWT auth and legacy mock mode */
+export type AuthUser = {
+    name: string;
+    email: string;
+    /** Maps to user ID in appartme-service (or zarzadca ID from mock) */
+    zarzadca_id: string;
+    /** JWT access token from appartme-service (undefined in mock/demo mode) */
+    token?: string;
+    /** JWT refresh token from appartme-service */
+    refreshToken?: string;
+    /** Role controlling what UI sections are visible */
+    role?: UserRole;
+    /** Numeric user ID from appartme-service */
+    userId?: string;
+};
 
 interface AppState {
     user: AuthUser | null;
@@ -62,8 +83,22 @@ type Action =
 
 function reducer(state: AppState, action: Action): AppState {
     switch (action.type) {
-        case "LOGIN": return { ...state, user: action.payload };
-        case "LOGOUT": return { ...state, user: null };
+        case "LOGIN": {
+            if (action.payload.token) {
+                localStorage.setItem("auth_token", action.payload.token);
+            }
+            if (action.payload.refreshToken) {
+                localStorage.setItem("auth_refresh_token", action.payload.refreshToken);
+            }
+            localStorage.setItem("auth_user", JSON.stringify(action.payload));
+            return { ...state, user: action.payload };
+        }
+        case "LOGOUT": {
+            localStorage.removeItem("auth_token");
+            localStorage.removeItem("auth_refresh_token");
+            localStorage.removeItem("auth_user");
+            return { ...state, user: null };
+        }
 
         case "ADD_INWESTOR": return { ...state, inwestorzy: [...state.inwestorzy, action.payload] };
         case "UPDATE_INWESTOR": return { ...state, inwestorzy: state.inwestorzy.map((x) => x.id === action.payload.id ? action.payload : x) };
@@ -110,13 +145,13 @@ const AppContext = createContext<{
 
 const initialState: AppState = {
     user: null,
-    inwestorzy: initInwestorzy,
-    inwestycje: initInwestycje,
-    budynki: initBudynki,
-    lokale: initLokale,
-    mierniki: initMierniki,
-    zarzadcy: initZarzadcy,
-    zarzadcaPrzypisania: initPrzypisania,
+    inwestorzy: [],
+    inwestycje: [],
+    budynki: [],
+    lokale: [],
+    mierniki: [],
+    zarzadcy: [],
+    zarzadcaPrzypisania: [],
 };
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
@@ -138,6 +173,17 @@ export function useAppStore() {
 export function useManagerScope() {
     const { state } = useAppStore();
     const { user, zarzadcaPrzypisania, budynki, lokale, mierniki } = state;
+
+    // If Admin or Demo account, see everything
+    if (user?.role === "admin" || user?.zarzadca_id === "demo-manager") {
+        const allBudynkiIds = new Set(budynki.map((b) => b.id));
+        return {
+            myBudynkiIds: allBudynkiIds,
+            myBudynki: budynki,
+            myLokale: lokale,
+            myMierniki: mierniki,
+        };
+    }
 
     const myBudynkiIds = new Set(
         zarzadcaPrzypisania

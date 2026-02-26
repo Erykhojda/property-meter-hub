@@ -87,33 +87,25 @@ export interface CsvApartmentRow {
 }
 
 /**
- * Builds CSV rows from mock apartment + meter data for a given date range.
- * "Previous reading" = first day value; accumulates daily deltas to produce current.
+ * Builds CSV rows from apartment + meter data + fetched readings for a given date range.
+ * "Previous reading" = first reading in range; accumulates daily deltas to produce current.
  */
 export function buildConsumptionCsvRows(
     apartments: { lokal_id: string; numer: string }[],
     mierniki: MiernikForExport[],
-    generateUnitReadings: (lokalId: string, days: number) => {
-        date: string; typ: string; wartosc: number; jakosc?: string; punkt_id: string; jednostka: string;
+    getReadingsForApt: (lokalId: string) => {
+        date: string; typ: string; wartosc: number; jakosc?: string; device_id?: string;
     }[],
     dateFrom: string,
     dateTo: string
 ): CsvApartmentRow[] {
     const rows: CsvApartmentRow[] = [];
 
-    const fromDate = new Date(dateFrom);
-    const toDate = new Date(dateTo);
-    const diffDays = Math.max(
-        1,
-        Math.ceil((toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24))
-    );
-
     for (const apt of apartments) {
         const aptMierniki = mierniki.filter((m) => m.lokal_id === apt.lokal_id);
         if (aptMierniki.length === 0) continue;
 
-        // Generate enough readings to cover the range
-        const allReadings = generateUnitReadings(apt.lokal_id, diffDays + 5);
+        const allReadings = getReadingsForApt(apt.lokal_id);
 
         // Filter to requested date range
         const rangeReadings = allReadings.filter((r) => r.date >= dateFrom && r.date <= dateTo);
@@ -126,7 +118,10 @@ export function buildConsumptionCsvRows(
         }
 
         for (const m of aptMierniki) {
-            const readings = (byTyp[m.typ] ?? []).sort((a, b) => a.date.localeCompare(b.date));
+            const readings = (byTyp[m.typ] ?? [])
+                .filter(r => r.device_id === m.device_id || !r.device_id) // Match device if provided
+                .sort((a, b) => a.date.localeCompare(b.date));
+
             if (readings.length === 0) continue;
 
             const poprzedni = readings[0].wartosc;
@@ -136,7 +131,7 @@ export function buildConsumptionCsvRows(
             // Determine dominant quality
             const qualityCounts = { validated: 0, estimated: 0, missing: 0 } as Record<string, number>;
             readings.forEach((r) => {
-                const q = (r as any).jakosc ?? "validated";
+                const q = r.jakosc ?? "validated";
                 qualityCounts[q] = (qualityCounts[q] ?? 0) + 1;
             });
             const jakosc = Object.entries(qualityCounts).sort((a, b) => b[1] - a[1])[0][0];

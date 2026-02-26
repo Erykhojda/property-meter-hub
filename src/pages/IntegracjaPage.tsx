@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -9,8 +9,11 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Settings, ShieldCheck, RefreshCw, Play, Send, Clock, CheckCircle2, XCircle, AlertTriangle, Loader2 } from "lucide-react";
-import { syncLogi, budynki, walidacjaWyniki, strukturaTransfery, harmonogramImportu } from "@/data/mock-data";
-import type { TransferStatus, ValidationResult } from "@/data/mock-data";
+import type { TransferStatus } from "@/data/mock-data";
+import { toast } from "sonner";
+import { getBmetersStatus, getBmetersJobs, triggerImport, type ImportJob, type BmetersStatus } from "@/lib/bmetersApi";
+import { useAuth } from "@/hooks/useAuth";
+
 
 const statusConfig = {
   success: { label: "Sukces", className: "bg-success/10 text-success border-success/20" },
@@ -26,12 +29,59 @@ const transferStatusConfig: Record<TransferStatus, { label: string; className: s
 };
 
 export default function IntegracjaPage() {
+  const { isAdmin } = useAuth();
   const [importRunning, setImportRunning] = useState(false);
-  const [schedule, setSchedule] = useState(harmonogramImportu);
+  const [schedule, setSchedule] = useState({
+    aktywny: true,
+    czestotliwosc: "codziennie",
+    godzina: "03:00",
+    ostatni_import: new Date().toISOString(),
+    nastepny_import: new Date().toISOString(),
+    retry_count: 3
+  });
+
+  // ── Real bmeters state ────────────────────────────────────────
+  const [bmetersStatus, setBmetersStatus] = useState<BmetersStatus | null>(null);
+  const [statusLoading, setStatusLoading] = useState(true);
+  const [syncJobs, setSyncJobs] = useState<ImportJob[]>([]);
+  const [jobsLoading, setJobsLoading] = useState(true);
+
+  useEffect(() => {
+    // Fetch bmeters connection status
+    getBmetersStatus()
+      .then((s) => setBmetersStatus(s))
+      .catch(() => setBmetersStatus(null))
+      .finally(() => setStatusLoading(false));
+
+    // Fetch import job history
+    getBmetersJobs({ limit: 50 })
+      .then((jobs) => setSyncJobs(jobs))
+      .catch(() => setSyncJobs([]))
+      .finally(() => setJobsLoading(false));
+  }, []);
 
   const handleSimulateImport = () => {
+    toast.info("Symulacja niedostępna w trybie połączenia z backendem");
+  };
+
+  const handleTriggerImport = async () => {
+    if (!isAdmin) {
+      toast.error("Tylko administrator może uruchomić import");
+      return;
+    }
     setImportRunning(true);
-    setTimeout(() => setImportRunning(false), 2000);
+    try {
+      await triggerImport();
+      toast.success("Import uruchomiony pomyślnie");
+      // Refresh jobs after short delay
+      setTimeout(() => {
+        getBmetersJobs({ limit: 50 }).then(setSyncJobs).catch(() => { });
+      }, 2000);
+    } catch (e: any) {
+      toast.error(`Błąd importu: ${e?.message ?? "Nieznany błąd"}`);
+    } finally {
+      setImportRunning(false);
+    }
   };
 
   return (
@@ -72,11 +122,25 @@ export default function IntegracjaPage() {
               <div className="flex items-center justify-between rounded-lg border p-4">
                 <div>
                   <p className="font-medium text-sm">Status połączenia</p>
-                  <p className="text-xs text-muted-foreground">Ostatni test: 20.02.2025 10:30</p>
+                  <p className="text-xs text-muted-foreground">
+                    {statusLoading
+                      ? "Sprawdzam..."
+                      : bmetersStatus
+                        ? `Połączony — v${bmetersStatus.version ?? "?"}`
+                        : "Brak połączenia"}
+                  </p>
                 </div>
-                <Badge className="bg-success/10 text-success border-success/20" variant="outline">
-                  <CheckCircle2 className="mr-1 h-3 w-3" />Połączony
-                </Badge>
+                {statusLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                ) : bmetersStatus ? (
+                  <Badge className="bg-success/10 text-success border-success/20" variant="outline">
+                    <CheckCircle2 className="mr-1 h-3 w-3" />Połączony
+                  </Badge>
+                ) : (
+                  <Badge className="bg-destructive/10 text-destructive border-destructive/20" variant="outline">
+                    <XCircle className="mr-1 h-3 w-3" />Rozłączony
+                  </Badge>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -95,43 +159,9 @@ export default function IntegracjaPage() {
               <p className="text-sm text-muted-foreground mb-4">
                 Sprawdzenie kompletności struktury, adresów budynków i identyfikatorów mierników przed synchronizacją z Bmeters.
               </p>
-              <div className="space-y-3">
-                {walidacjaWyniki.map((v) => {
-                  const allOk = v.adres_ok && v.lokale_ok && v.mierniki_ok;
-                  return (
-                    <div key={v.budynek_id} className="rounded-lg border p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <div>
-                          <p className="font-medium text-sm">{v.budynek_nazwa}</p>
-                          <p className="text-xs text-muted-foreground">{budynki.find(b => b.id === v.budynek_id)?.adres}</p>
-                        </div>
-                        <Badge className={allOk ? "bg-success/10 text-success border-success/20" : "bg-destructive/10 text-destructive border-destructive/20"} variant="outline">
-                          {allOk ? "✓ Poprawny" : `✗ ${v.bledy.length} błędów`}
-                        </Badge>
-                      </div>
-                      <div className="flex gap-4 text-xs">
-                        <span className={v.adres_ok ? "text-success" : "text-destructive"}>
-                          {v.adres_ok ? "✓" : "✗"} Adres
-                        </span>
-                        <span className={v.lokale_ok ? "text-success" : "text-destructive"}>
-                          {v.lokale_ok ? "✓" : "✗"} Lokale
-                        </span>
-                        <span className={v.mierniki_ok ? "text-success" : "text-destructive"}>
-                          {v.mierniki_ok ? "✓" : "✗"} Mierniki
-                        </span>
-                      </div>
-                      {v.bledy.length > 0 && (
-                        <div className="mt-2 space-y-1">
-                          {v.bledy.map((b, i) => (
-                            <p key={i} className="text-xs text-destructive flex items-center gap-1">
-                              <AlertTriangle className="h-3 w-3" />{b}
-                            </p>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+              <div className="flex flex-col items-center justify-center py-12 text-center border-dashed border-2 rounded-lg">
+                <ShieldCheck className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                <p className="text-sm text-muted-foreground">Silnik walidacji zostanie zintegrowany z backendem w kolejnej fazie.</p>
               </div>
             </CardContent>
           </Card>
@@ -150,26 +180,9 @@ export default function IntegracjaPage() {
               <p className="text-sm text-muted-foreground mb-4">
                 Status przekazania struktury budynków i adresów do systemu Bmeters.
               </p>
-              <div className="space-y-3">
-                {strukturaTransfery.map((t) => {
-                  const b = budynki.find((x) => x.id === t.budynek_id);
-                  const cfg = transferStatusConfig[t.status];
-                  const Icon = cfg.icon;
-                  return (
-                    <div key={t.id} className="flex items-center justify-between rounded-lg border p-3">
-                      <div>
-                        <p className="font-medium text-sm">{b?.nazwa}</p>
-                        <p className="text-xs text-muted-foreground">{t.szczegoly}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {new Date(t.data).toLocaleString("pl-PL")}
-                        </p>
-                      </div>
-                      <Badge className={cfg.className} variant="outline">
-                        <Icon className="mr-1 h-3 w-3" />{cfg.label}
-                      </Badge>
-                    </div>
-                  );
-                })}
+              <div className="flex flex-col items-center justify-center py-12 text-center border-dashed border-2 rounded-lg">
+                <Send className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                <p className="text-sm text-muted-foreground">Transfery struktury będą widoczne po podłączeniu API bmeters-backend.</p>
               </div>
             </CardContent>
           </Card>
@@ -231,7 +244,7 @@ export default function IntegracjaPage() {
                   {importRunning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
                   {importRunning ? "Importowanie..." : "Symuluj import"}
                 </Button>
-                <Button variant="outline">
+                <Button variant="outline" onClick={handleTriggerImport} disabled={importRunning || !isAdmin}>
                   <RefreshCw className="mr-2 h-4 w-4" />Import z API
                 </Button>
               </div>
@@ -246,36 +259,51 @@ export default function IntegracjaPage() {
               <CardTitle className="text-base">Historia synchronizacji</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Budynki</TableHead>
-                    <TableHead className="text-right">Rekordy</TableHead>
-                    <TableHead className="text-right">Błędy</TableHead>
-                    <TableHead className="text-right">Czas (ms)</TableHead>
-                    <TableHead>Szczegóły</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {syncLogi.map((s) => (
-                    <TableRow key={s.id}>
-                      <TableCell className="text-sm whitespace-nowrap">{new Date(s.created_at).toLocaleString("pl-PL")}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={statusConfig[s.status].className}>
-                          {statusConfig[s.status].label}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">{s.budynki_count}</TableCell>
-                      <TableCell className="text-right">{s.rekordy_count}</TableCell>
-                      <TableCell className="text-right">{s.bledy_count}</TableCell>
-                      <TableCell className="text-right text-muted-foreground">{s.czas_ms}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{s.szczegoly}</TableCell>
+              {jobsLoading ? (
+                <div className="flex items-center justify-center py-10">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Data</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Budynki</TableHead>
+                      <TableHead className="text-right">Rekordy</TableHead>
+                      <TableHead className="text-right">Błędy</TableHead>
+                      <TableHead className="text-right">Czas (ms)</TableHead>
+                      <TableHead>Szczegóły</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {syncJobs.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                          Brak danych z bmeters-backend
+                        </TableCell>
+                      </TableRow>
+                    ) : syncJobs.map((s) => {
+                      const cfg = statusConfig[s.status as keyof typeof statusConfig] ?? statusConfig.failed;
+                      return (
+                        <TableRow key={s.id}>
+                          <TableCell className="text-sm whitespace-nowrap">{new Date(s.created_at).toLocaleString("pl-PL")}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={cfg.className}>
+                              {cfg.label}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">{s.budynki_count ?? "—"}</TableCell>
+                          <TableCell className="text-right">{s.rekordy_count ?? "—"}</TableCell>
+                          <TableCell className="text-right">{s.bledy_count ?? "—"}</TableCell>
+                          <TableCell className="text-right text-muted-foreground">{s.czas_ms ?? "—"}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{s.szczegoly ?? ""}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

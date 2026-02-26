@@ -5,7 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { auditLogi } from "@/data/mock-data";
+import { useEffect } from "react";
+import { getAuditLogs, type AuditLogEntry } from "@/lib/bmetersApi";
 
 const akcjaColor: Record<string, string> = {
   "Dodanie": "bg-success/10 text-success border-success/20",
@@ -23,13 +24,24 @@ export default function AudytPage() {
   const [filterEntity, setFilterEntity] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [logs, setLogs] = useState<AuditLogEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const uniqueActions = [...new Set(auditLogi.map((a) => a.akcja))];
-  const uniqueEntities = [...new Set(auditLogi.map((a) => a.encja))];
+  useEffect(() => {
+    getAuditLogs({ limit: 100 })
+      .then(setLogs)
+      .catch(() => setLogs([]))
+      .finally(() => setIsLoading(false));
+  }, []);
 
-  const filtered = auditLogi.filter((a) => {
-    if (filterAction !== "all" && a.akcja !== filterAction) return false;
-    if (filterEntity !== "all" && a.encja !== filterEntity) return false;
+  const uniqueActions = [...new Set(logs.map((a) => a.akcja || a.action || ""))].filter(Boolean);
+  const uniqueEntities = [...new Set(logs.map((a) => a.encja || a.entity || ""))].filter(Boolean);
+
+  const filtered = logs.filter((a) => {
+    const action = a.akcja || a.action;
+    const entity = a.encja || a.entity;
+    if (filterAction !== "all" && action !== filterAction) return false;
+    if (filterEntity !== "all" && entity !== filterEntity) return false;
     if (dateFrom && new Date(a.created_at) < new Date(dateFrom)) return false;
     if (dateTo && new Date(a.created_at) > new Date(dateTo + "T23:59:59")) return false;
     return true;
@@ -95,20 +107,24 @@ export default function AudytPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((a) => (
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8">Pobieranie logów...</TableCell>
+                </TableRow>
+              ) : filtered.map((a) => (
                 <TableRow key={a.id}>
                   <TableCell className="text-sm whitespace-nowrap">{new Date(a.created_at).toLocaleString("pl-PL")}</TableCell>
-                  <TableCell className="font-medium">{a.user}</TableCell>
+                  <TableCell className="font-medium">{a.user || "System"}</TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={akcjaColor[a.akcja] ?? ""}>
-                      {a.akcja}
+                    <Badge variant="outline" className={akcjaColor[(a.akcja || a.action) as string] ?? ""}>
+                      {a.akcja || a.action}
                     </Badge>
                   </TableCell>
-                  <TableCell>{a.encja}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground max-w-[300px] truncate">{a.szczegoly}</TableCell>
+                  <TableCell>{a.encja || a.entity}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground max-w-[300px] truncate">{a.szczegoly || a.details}</TableCell>
                 </TableRow>
               ))}
-              {filtered.length === 0 && (
+              {!isLoading && filtered.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                     Brak wyników dla wybranych filtrów
